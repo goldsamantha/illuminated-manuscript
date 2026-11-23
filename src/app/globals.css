@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f3ecdc;
+  --ink: #1b1712;
+  --rule: #cfc4a8;
+  --vermilion: #c8372d;
+  --lapis: #2a4b9b;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* Light misregistered overprint: two colour plates multiplied under the ink.
+   Usage: <span class="overprint" data-text="Same text">Same text</span> */
+.overprint {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.overprint::before,
+.overprint::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.overprint::before {
+  color: rgb(0 168 214 / 0.75);
+  transform: translate(-0.045em, 0.03em);
+}
+.overprint::after {
+  color: rgb(230 0 126 / 0.65);
+  transform: translate(0.05em, -0.025em);
+}
+
+.chip {
+  border: 1px solid var(--rule);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--ink);
+}
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.btn {
+  border: 1px solid var(--ink);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.btn:hover {
+  background: rgb(27 23 18 / 0.08);
+}
+.btn-primary {
+  background: var(--vermilion);
+  border-color: var(--vermilion);
+  color: var(--paper);
+}
+.btn-primary:hover {
+  background: #a92c23;
+}
+
+.field {
+  border: 1px solid var(--rule);
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+input[type="range"] {
+  accent-color: var(--ink);
+  width: 100%;
+}
+
+.knot-handle {
+  fill: transparent;
+  cursor: pointer;
+}
+.knot-handle:hover {
+  fill: rgb(212 56 13 / 0.25);
+}
