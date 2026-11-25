@@ -5,19 +5,14 @@
  * (0..2*cols, 0..2*rows). Primary dots sit on (even, even), secondary dots on
  * (odd, odd), and every remaining lattice point (i + j odd) is a crossing.
  * Two strands cross diagonally at each crossing unless a break line ("wall")
- * sits there, in which case the strands bounce off it. The outer border is
+ * sits there, in which case the strands deflect off it. The outer border is
  * always walled.
  */
 
 export type Wall = "h" | "v";
 export type Walls = Record<string, Wall>;
 export type Symmetry =
-  | "none"
-  | "mirror-x"
-  | "mirror-y"
-  | "mirror-xy"
-  | "rot2"
-  | "rot4";
+  "none" | "mirror-x" | "mirror-y" | "mirror-xy" | "rot2" | "rot4";
 
 export interface GridSpec {
   cols: number;
@@ -30,18 +25,26 @@ export interface GridSpec {
 
 export type Point = [number, number];
 
+/** One step of a strand: from midpoint `a` to midpoint `b`, past `c`. */
 export interface Piece {
   a: Point;
   b: Point;
-  /** The crossing this piece passes through (or bounces at). */
+  /** The crossing this piece passes through, or the break it deflects off. */
   c: Point;
-  kind: "over" | "under" | "bounce";
-  strand: number;
+  /**
+   * `over` / `under`: straight through a crossing.
+   * `turn`: deflects off a lone break, curving round it.
+   * `run`: deflects off a break with a parallel break next door, so the
+   *        strand runs straight alongside the pair.
+   */
+  kind: "over" | "under" | "turn" | "run";
 }
 
+/** A closed loop: each piece ends where the next begins. */
+export type Strand = Piece[];
+
 export interface Knot {
-  pieces: Piece[];
-  strandCount: number;
+  strands: Strand[];
 }
 
 export const wallKey = (i: number, j: number) => `${i},${j}`;
@@ -153,82 +156,76 @@ export function toggleWall(
   return out;
 }
 
-// Arm directions: 0 NW, 1 NE, 2 SE, 3 SW.
+// A crossing has four arms, one toward each diagonal neighbour.
+// 0 NW, 1 NE, 2 SE, 3 SW.
 const DIRS: Point[] = [
   [-1, -1],
   [1, -1],
   [1, 1],
   [-1, 1],
 ];
+const opposite = (d: number) => (d + 2) % 4;
+
+/** The arm a strand leaves by, having entered a crossing by arm `d`. */
+function exitArm(wall: Wall | undefined, d: number) {
+  if (wall === "h") return [1, 0, 3, 2][d];
+  if (wall === "v") return [3, 2, 1, 0][d];
+  return opposite(d);
+}
 
 export function buildKnot(cols: number, rows: number, walls: Walls): Knot {
   const W = 2 * cols;
   const H = 2 * rows;
-  const stride = W + 1;
-  const armId = (i: number, j: number, d: number) => (j * stride + i) * 4 + d;
   const inside = (i: number, j: number) => i >= 0 && i <= W && j >= 0 && j <= H;
+  const wallAt = (i: number, j: number) =>
+    borderWall(i, j, cols, rows) ?? walls[wallKey(i, j)];
 
-  const parent = new Int32Array((W + 1) * (H + 1) * 4).map((_, n) => n);
-  const find = (x: number): number => {
-    while (parent[x] !== x) {
-      parent[x] = parent[parent[x]];
-      x = parent[x];
+  const visited = new Set<string>();
+  const strands: Strand[] = [];
+
+  /** Follow a strand from arm `d` of crossing (i, j) until it closes. */
+  const trace = (i: number, j: number, d: number): Strand => {
+    const strand: Strand = [];
+    while (!visited.has(`${i},${j},${d}`)) {
+      const wall = wallAt(i, j);
+      const e = exitArm(wall, d);
+      visited.add(`${i},${j},${d}`).add(`${i},${j},${e}`);
+
+      const next = (arm: number): Point => [i + DIRS[arm][0], j + DIRS[arm][1]];
+      const mid = (arm: number): Point => [
+        i + DIRS[arm][0] / 2,
+        j + DIRS[arm][1] / 2,
+      ];
+      const parallel = (arm: number) => wallAt(...next(arm)) === wall;
+      // Alternate which diagonal is on top so the weave goes over, under, over.
+      const over = (d % 2 === 0) === (i % 2 === 1);
+
+      strand.push({
+        a: mid(d),
+        b: mid(e),
+        c: [i, j],
+        kind: !wall
+          ? over
+            ? "over"
+            : "under"
+          : parallel(d) || parallel(e)
+            ? "run"
+            : "turn",
+      });
+      [i, j] = next(e);
+      d = opposite(e);
     }
-    return x;
+    return strand;
   };
-  const union = (a: number, b: number) => {
-    parent[find(a)] = find(b);
-  };
-
-  const raw: (Omit<Piece, "strand"> & { arm: number })[] = [];
 
   for (let j = 0; j <= H; j++) {
     for (let i = 0; i <= W; i++) {
       if ((i + j) % 2 !== 1) continue;
-      const has = DIRS.map(([dx, dy]) => inside(i + dx, j + dy));
-      // Link each arm to the facing arm of the neighbouring crossing.
-      for (let d = 1; d <= 2; d++) {
-        if (has[d]) {
-          const [dx, dy] = DIRS[d];
-          union(armId(i, j, d), armId(i + dx, j + dy, (d + 2) % 4));
-        }
+      for (let d = 0; d < 4; d++) {
+        if (!inside(i + DIRS[d][0], j + DIRS[d][1])) continue;
+        if (!visited.has(`${i},${j},${d}`)) strands.push(trace(i, j, d));
       }
-      const wall = borderWall(i, j, cols, rows) ?? walls[wallKey(i, j)];
-      const pairs: [number, number][] =
-        wall === "v"
-          ? [
-              [0, 3],
-              [1, 2],
-            ]
-          : wall === "h"
-            ? [
-                [0, 1],
-                [2, 3],
-              ]
-            : [
-                [0, 2],
-                [1, 3],
-              ];
-      const overPair = i % 2 === 1 ? 0 : 1;
-      pairs.forEach(([p, q], n) => {
-        if (!has[p] || !has[q]) return;
-        union(armId(i, j, p), armId(i, j, q));
-        raw.push({
-          a: [i + DIRS[p][0] / 2, j + DIRS[p][1] / 2],
-          b: [i + DIRS[q][0] / 2, j + DIRS[q][1] / 2],
-          c: [i, j],
-          kind: wall ? "bounce" : n === overPair ? "over" : "under",
-          arm: armId(i, j, p),
-        });
-      });
     }
   }
-
-  const ids = new Map<number, number>();
-  const pieces: Piece[] = raw.map(({ arm, ...rest }) => {
-    const root = find(arm);
-    if (!ids.has(root)) ids.set(root, ids.size);
-    return { ...rest, strand: ids.get(root)! };
-  });
-  return { pieces, strandCount: ids.size };
+  return { strands };
 }

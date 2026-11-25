@@ -3,6 +3,8 @@ import {
   interiorCrossings,
   wallKey,
   type Piece,
+  type Point,
+  type Strand,
   type Walls,
 } from "@/lib/knot";
 
@@ -36,20 +38,26 @@ export const defaultKnotStyle: KnotStyle = {
 };
 
 const PAD = 0.5;
-const EXT = 0.06;
+// How far an over-crossing patch reaches from the crossing toward each end of
+// its piece. The cover layers reach a touch past the ink so no seam shows.
+const OVER_INK = 0.66;
+const OVER_COVER = 0.7;
 
-function piecePath(p: Piece, k: number, ext: number) {
-  const [ax, ay] = p.a;
-  const [bx, by] = p.b;
-  const [cx, cy] = p.c;
-  const f = (n: number) => +n.toFixed(3);
-  const a2 = `${f(ax + (ax - cx) * ext)} ${f(ay + (ay - cy) * ext)}`;
-  const b2 = `${f(bx + (bx - cx) * ext)} ${f(by + (by - cy) * ext)}`;
-  if (p.kind !== "bounce") return `M${a2}L${b2}`;
-  const c1 = `${f(ax + (cx - ax) * k)} ${f(ay + (cy - ay) * k)}`;
-  const c2 = `${f(bx + (cx - bx) * k)} ${f(by + (cy - by) * k)}`;
-  return `M${a2}L${ax} ${ay}C${c1} ${c2} ${bx} ${by}L${b2}`;
+const lerp = (p: Point, q: Point, t: number) =>
+  p.map((v, n) => +(v + (q[n] - v) * t).toFixed(3));
+
+/** A whole strand as one closed path. Only turns curve; `k` sets how far
+ *  their handles pull toward the break (0 = chamfer). */
+function strandPath(strand: Strand, k: number) {
+  const steps = strand.map(({ a, b, c, kind }) =>
+    kind === "turn" ? `C${lerp(a, c, k)} ${lerp(b, c, k)} ${b}` : `L${b}`,
+  );
+  return `M${strand[0].a}${steps.join("")}Z`;
 }
+
+/** The short stretch of a piece either side of its crossing. */
+const patchPath = ({ a, b, c }: Piece, reach: number) =>
+  `M${lerp(c, a, reach)}L${lerp(c, b, reach)}`;
 
 interface Props {
   cols: number;
@@ -77,43 +85,45 @@ export default function KnotSvg({
   const s = { ...defaultKnotStyle, ...style };
   const W = 2 * cols;
   const H = 2 * rows;
-  const { pieces } = buildKnot(cols, rows, walls);
+  const { strands } = buildKnot(cols, rows, walls);
 
-  // Ribbons bounce on both sides of a wall, so the turn must stay clear of it.
+  // Ribbons turn on both sides of a break, so the curve must stay clear of it.
   const clearance = Math.min(0.5, s.width / 2 + s.outline + 0.03);
-  const kMax = Math.max(0, (2 - 4 * clearance) / 1.5);
-  const k = s.roundness * kMax;
+  const k = (s.roundness * Math.max(0, 2 - 4 * clearance)) / 1.5;
 
-  const under = pieces.filter((p) => p.kind !== "over");
-  const over = pieces.filter((p) => p.kind === "over");
   const inkW = s.width + 2 * s.outline;
-  const color = (p: Piece) => s.colors[p.strand % s.colors.length];
+  const split = s.ribbon === "split";
   const filled = s.ribbon !== "line" && s.colors.length > 0;
+  const color = (n: number) => s.colors[n % s.colors.length];
 
-  const linePass = (list: Piece[], tag: string) => (
-    <g key={tag}>
-      {list.map((p, n) => (
-        <path key={`i${n}`} d={piecePath(p, k, 0)} stroke={s.ink} strokeWidth={inkW} />
-      ))}
-      {list.map((p, n) => (
-        <path key={`p${n}`} d={piecePath(p, k, EXT)} stroke={s.paper} strokeWidth={s.width} />
-      ))}
-      {s.ribbon === "split" &&
-        list.map((p, n) => (
-          <path key={`s${n}`} d={piecePath(p, k, EXT)} stroke={s.ink} strokeWidth={s.outline} />
-        ))}
-    </g>
+  // Every strand is drawn whole, then each over-crossing is patched on top.
+  const overs = strands.flatMap((strand, n) =>
+    strand.filter((p) => p.kind === "over").map((piece) => ({ piece, n })),
   );
-
-  const fillPass = (list: Piece[]) =>
-    list.map((p, n) => (
+  const whole = (paint: (n: number) => string, width: number) =>
+    strands.map((strand, n) => (
       <path
-        key={`${p.kind}${n}`}
-        d={piecePath(p, k, EXT)}
-        stroke={color(p)}
-        strokeWidth={s.width}
+        key={n}
+        d={strandPath(strand, k)}
+        stroke={paint(n)}
+        strokeWidth={width}
       />
     ));
+  const patches = (
+    paint: (n: number) => string,
+    width: number,
+    reach = OVER_COVER,
+  ) =>
+    overs.map(({ piece, n }, m) => (
+      <path
+        key={m}
+        d={patchPath(piece, reach)}
+        stroke={paint(n)}
+        strokeWidth={width}
+      />
+    ));
+  const ink = () => s.ink;
+  const paper = () => s.paper;
 
   return (
     <svg
@@ -125,17 +135,27 @@ export default function KnotSvg({
       role="img"
       aria-label={title ?? "Knotwork panel"}
     >
-      <rect x={-PAD} y={-PAD} width={W + 2 * PAD} height={H + 2 * PAD} fill={s.paper} />
-      <g fill="none" strokeLinecap="butt" strokeLinejoin="round">
-        {linePass(under, "under")}
-        {linePass(over, "over")}
+      <rect
+        x={-PAD}
+        y={-PAD}
+        width={W + 2 * PAD}
+        height={H + 2 * PAD}
+        fill={s.paper}
+      />
+      <g fill="none" strokeLinejoin="round">
+        {whole(ink, inkW)}
+        {whole(paper, s.width)}
+        {split && whole(ink, s.outline)}
+        {patches(ink, inkW, OVER_INK)}
+        {patches(paper, s.width)}
+        {split && patches(ink, s.outline)}
         {filled && (
           <g
             style={{ mixBlendMode: "multiply" }}
             transform={`translate(${s.overprint} ${s.overprint * 0.6})`}
           >
-            {fillPass(under)}
-            {fillPass(over)}
+            {whole(color, s.width)}
+            {patches(color, s.width)}
           </g>
         )}
       </g>

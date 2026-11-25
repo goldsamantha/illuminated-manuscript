@@ -149,7 +149,7 @@ export default function BorderBuilder() {
     setStyle((s) => ({ ...s, ...patch }));
 
   const strandCount = useMemo(
-    () => buildKnot(spec.cols, spec.rows, walls).strandCount,
+    () => buildKnot(spec.cols, spec.rows, walls).strands.length,
     [spec.cols, spec.rows, walls],
   );
 
