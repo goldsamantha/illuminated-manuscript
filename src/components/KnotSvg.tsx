@@ -22,8 +22,6 @@ export interface KnotStyle {
   ink: string;
   /** Strand colours; cycled per strand. */
   colors: string[];
-  /** Misregistration of the colour plate, in half-cell units. */
-  overprint: number;
 }
 
 export const defaultKnotStyle: KnotStyle = {
@@ -34,7 +32,6 @@ export const defaultKnotStyle: KnotStyle = {
   paper: "#f3ecdc",
   ink: "#1b1712",
   colors: ["#2a4b9b", "#c8372d", "#c9972b", "#3f7d5a"],
-  overprint: 0.06,
 };
 
 const PAD = 0.5;
@@ -150,10 +147,7 @@ export default function KnotSvg({
         {patches(paper, s.width)}
         {split && patches(ink, s.outline)}
         {filled && (
-          <g
-            style={{ mixBlendMode: "multiply" }}
-            transform={`translate(${s.overprint} ${s.overprint * 0.6})`}
-          >
+          <g style={{ mixBlendMode: "multiply" }}>
             {whole(color, s.width)}
             {patches(color, s.width)}
           </g>

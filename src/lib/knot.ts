@@ -18,8 +18,6 @@ export interface GridSpec {
   cols: number;
   rows: number;
   seed: number;
-  /** Probability (0..1) that an interior crossing gets a break line. */
-  density: number;
   symmetry: Symmetry;
 }
 
@@ -118,14 +116,17 @@ export function mulberry32(seed: number) {
   };
 }
 
+/** Chance that an interior crossing gets a break line. */
+const BREAK_CHANCE = 0.3;
+
 export function generateWalls(spec: GridSpec): Walls {
-  const { cols, rows, seed, density, symmetry } = spec;
+  const { cols, rows, seed, symmetry } = spec;
   const rand = mulberry32(seed);
   const walls: Walls = {};
   const visited = new Set<string>();
   for (const [i, j] of interiorCrossings(cols, rows)) {
     if (visited.has(wallKey(i, j))) continue;
-    const place = rand() < density;
+    const place = rand() < BREAK_CHANCE;
     const wall: Wall = rand() < 0.5 ? "h" : "v";
     for (const p of orbit(i, j, wall, cols, rows, symmetry)) {
       const k = wallKey(p.i, p.j);

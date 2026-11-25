@@ -9,7 +9,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Illuminated Manuscript",
-  description: "An interactive illuminated manuscript, traversed through its letters and marginalia.",
+  description:
+    "An interactive illuminated manuscript, traversed through its letters and marginalia.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

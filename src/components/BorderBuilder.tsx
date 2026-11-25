@@ -71,7 +71,6 @@ const initialSpec: GridSpec = {
   cols: 4,
   rows: 4,
   seed: 1407,
-  density: 0.3,
   symmetry: "rot4",
 };
 
@@ -226,14 +225,6 @@ export default function BorderBuilder() {
           options={SYMMETRIES}
           onChange={(symmetry) => respec({ symmetry })}
         />
-        <Slider
-          label="break density"
-          min={0}
-          max={0.8}
-          step={0.02}
-          value={spec.density}
-          onChange={(density) => respec({ density })}
-        />
 
         <div className="flex items-end gap-2">
           <label className="flex flex-1 flex-col gap-1">
@@ -288,14 +279,6 @@ export default function BorderBuilder() {
           step={0.05}
           value={style.roundness}
           onChange={(roundness) => restyle({ roundness })}
-        />
-        <Slider
-          label="overprint offset"
-          min={0}
-          max={0.2}
-          step={0.01}
-          value={style.overprint}
-          onChange={(overprint) => restyle({ overprint })}
         />
 
         <div className="flex flex-col gap-1.5">
