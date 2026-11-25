@@ -6,7 +6,7 @@ const pages = process.env.GITHUB_PAGES === "true";
 
 const nextConfig: NextConfig = {
   output: pages ? "export" : undefined,
-  basePath: pages ? "/illuminated-manuscript/builder" : undefined,
+  basePath: pages ? "/illuminated-manuscript" : undefined,
   images: { unoptimized: true },
   // Both rely on a server, which a static export does not have.
   cacheComponents: !pages,
